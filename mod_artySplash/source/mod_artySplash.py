@@ -6,7 +6,6 @@ from gui.mods.mod_mods_gui import g_gui, inject
 import VehicleGunRotator
 from gui import InputHandler
 from Avatar import PlayerAvatar
-from gui.app_loader import g_appLoader
 from AvatarInputHandler.aih_constants import CTRL_MODE_NAME
 # noinspection PyProtectedMember
 from tutorial.control.battle.functional import _StaticObjectMarker3D as StaticObjectMarker3D
@@ -17,9 +16,9 @@ from gui.shared.gui_items import Vehicle
 class Config(object):
     def __init__(self):
         self.ids = 'artySplash'
-        self.version = 'v2.08 (2019-04-01)'
+        self.version = 'v2.10 (2019-05-02)'
         self.author = 'by spoter'
-        self.version_id = 208
+        self.version_id = 210
         self.buttons = {
             'buttonShowDot'   : [Keys.KEY_C, [Keys.KEY_LALT, Keys.KEY_RALT]],
             'buttonShowSplash': [Keys.KEY_Z, [Keys.KEY_LALT, Keys.KEY_RALT]]
@@ -219,22 +218,21 @@ class ArtyBall(object):
 
     @inject.log
     def injectButton(self, event):
-        if g_appLoader.getDefBattleApp():
-            if g_gui.get_key(config.data['buttonShowSplash']) and event.isKeyDown():
-                self.modelSplashKeyPressed = True
-                self.modelSplashVisible = not self.modelSplashVisible
-                message = config.i18n['UI_artySplash_messageSplashOn'] if self.modelSplashVisible else config.i18n['UI_artySplash_messageSplashOff']
-                color = '#84DE40' if self.modelSplashVisible else '#FFA500'
-                inject.message(message, color)
-                self.setVisible()
+        if g_gui.get_key(config.data['buttonShowSplash']) and event.isKeyDown():
+            self.modelSplashKeyPressed = True
+            self.modelSplashVisible = not self.modelSplashVisible
+            message = config.i18n['UI_artySplash_messageSplashOn'] if self.modelSplashVisible else config.i18n['UI_artySplash_messageSplashOff']
+            color = '#84DE40' if self.modelSplashVisible else '#FFA500'
+            inject.message(message, color)
+            self.setVisible()
 
-            if g_gui.get_key(config.data['buttonShowDot']) and event.isKeyDown():
-                self.modelDotKeyPressed = True
-                self.modelDotVisible = not self.modelDotVisible
-                message = config.i18n['UI_artySplash_messageDotOn'] if self.modelDotVisible else config.i18n['UI_artySplash_messageDotOff']
-                color = '#84DE40' if self.modelDotVisible else '#FFA500'
-                inject.message(message, color)
-                self.setVisible()
+        if g_gui.get_key(config.data['buttonShowDot']) and event.isKeyDown():
+            self.modelDotKeyPressed = True
+            self.modelDotVisible = not self.modelDotVisible
+            message = config.i18n['UI_artySplash_messageDotOn'] if self.modelDotVisible else config.i18n['UI_artySplash_messageDotOff']
+            color = '#84DE40' if self.modelDotVisible else '#FFA500'
+            inject.message(message, color)
+            self.setVisible()
 
 
 config = Config()

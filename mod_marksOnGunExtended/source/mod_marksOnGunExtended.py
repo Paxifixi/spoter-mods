@@ -16,13 +16,16 @@ from Vehicle import Vehicle
 from constants import ARENA_BONUS_TYPE
 from dossiers2.ui.achievements import ACHIEVEMENT_BLOCK, MARK_ON_GUN_RECORD
 from gui import InputHandler, g_guiResetters
+from gui.Scaleform.daapi.view.lobby.hangar.hangar_header import HangarHeader
 from gui.Scaleform.daapi.view.lobby.techtree.dumpers import NationObjDumper
 from gui.Scaleform.daapi.view.meta.CrewMeta import CrewMeta
-from gui.app_loader import g_appLoader
+from gui.Scaleform.locale.MENU import MENU as MU
 from gui.battle_control.controllers import feedback_events
+from gui.shared.formatters import text_styles
 from gui.shared.gui_items.dossier.achievements.MarkOnGunAchievement import MarkOnGunAchievement
 from helpers import dependency
 from skeletons.account_helpers.settings_core import ISettingsCore
+from gui.Scaleform.daapi.view.lobby.profile.ProfileUtils import ProfileUtils
 
 DAMAGE_EVENTS = frozenset([BATTLE_EVENT_TYPE.RADIO_ASSIST, BATTLE_EVENT_TYPE.TRACK_ASSIST, BATTLE_EVENT_TYPE.STUN_ASSIST, BATTLE_EVENT_TYPE.DAMAGE, BATTLE_EVENT_TYPE.TANKING, BATTLE_EVENT_TYPE.RECEIVED_DAMAGE])
 COLOR = ['#0000FF', '#A52A2B', '#D3691E', '#6595EE', '#FCF5C8', '#00FFFF', '#28F09C', '#FFD700', '#008000', '#ADFF2E', '#FF69B5', '#00FF00', '#FFA500', '#FFC0CB', '#800080', '#FF0000', '#8378FC', '#DB0400', '#80D639', '#FFE041', '#FFFF00', '#FF6347', '#FFFFFF']
@@ -51,13 +54,15 @@ battleDamageRating = [battleDamageRating0, battleDamageRating20, battleDamageRat
 
 LEVELS = [0.0, 20.0, 40.0, 55.0, 65.0, 85.0, 95.0, 100.0]
 MARKS = ['', '*', '**', '***']
+ASSISTS = ['assistSpot', 'assistTrack', 'assistSpam']
+ASSISTS_COLOR = ['#28F09C', '#8378FC', '#00FFFF']
 
 
 class Config(object):
     def __init__(self):
         self.ids = 'marksOnGunExtended'
-        self.version = 'v6.05 (2019-04-05)'
-        self.version_id = 605
+        self.version = 'v7.02 (2019-05-10)'
+        self.version_id = 702
         self.author = 'by spoter to b4it.org'
         self.buttons = {
             'buttonShow'    : [Keys.KEY_NUMPAD9, [Keys.KEY_LALT, Keys.KEY_RALT]],
@@ -72,13 +77,14 @@ class Config(object):
             'buttonSizeUp'                          : self.buttons['buttonSizeUp'],
             'buttonSizeDown'                        : self.buttons['buttonSizeDown'],
             'buttonReset'                           : self.buttons['buttonReset'],
-            'showInBattle'                          : True,
+            'showInBattle'                          : False,
             'showInBattleHalfPercents'              : False,
             'showInReplay'                          : True,
             'showInStatistic'                       : True,
             'showInTechTree'                        : True,
             'showInTechTreeMarkOfGunPercent'        : True,
             'showInTechTreeMarkOfGunPercentFirst'   : False,
+            'showInHangar'                          : True,
             'upColor'                               : 18,
             'downColor'                             : 21,
             'unknownColor'                          : 16,
@@ -97,7 +103,7 @@ class Config(object):
                                                       '<font size=\"20\">{c_battleMarkOfGun}{status}</font><font size=\"14\">{c_damageCurrent}</font>\n'
                                                       '{c_damageToMark65}{c_damageToMark85}\n'
                                                       '{c_damageToMark95}{c_damageToMark100}',
-            'battleMessage{status}Up'               : '<img src=\"img://gui/maps/icons/messenger/status/24x24/chat_icon_user_is_online.png\" vspace=\"-5\"/>',
+            'battleMessage{status}Up'               : '<img src=\"img://gui/maps/icons/messenger/status/24x24/chat_icon_user_is_online.png\" vspace=\"-5\"/> ',
             'battleMessage{c_status}Up'             : 'Δ',
             'battleMessage{status}Down'             : '<img src=\"img://gui/maps/icons/messenger/status/24x24/chat_icon_user_is_busy.png\" vspace=\"-5\"/>',
             'battleMessage{c_status}Down'           : 'V',
@@ -128,7 +134,10 @@ class Config(object):
             'battleMessage{damageToMarkInfoLevel}'  : '%s%%',
             'battleMessage{c_damageToMarkInfoLevel}': '%s',
             'battleMessageSizeInPercent'            : 100,
-            'UI'                                    : 1
+            'battleMessage{assistSpot}'             : '<img src=\"img://gui/maps/icons/library/efficiency/48x48/detection.png\" width=\"16\" height=\"16\" vspace=\"-5\"/>',
+            'battleMessage{assistTrack}'            : '<img src=\"img://gui/maps/icons/library/efficiency/48x48/immobilized.png\" width=\"16\" height=\"16\" vspace=\"-5\"/>',
+            'battleMessage{assistSpam}'             : '<img src=\"img://gui/maps/icons/library/efficiency/48x48/stun.png\" width=\"16\" height=\"16\" vspace=\"-5\"/>',
+            'UI'                                    : 9
         }
         self.i18n = {
             'version'                                                         : self.version_id,
@@ -174,6 +183,8 @@ class Config(object):
             'UI_setting_techTreeMasterySize_value'                            : '',
             'UI_setting_techTreeMarkOfGunPercentSize_text'                    : 'TechTree: MoE % font size',
             'UI_setting_techTreeMarkOfGunPercentSize_value'                   : '',
+            'UI_setting_showInHangar_text'                                    : 'Hangar: Show MoE mod',
+            'UI_setting_showInHangar_tooltip'                                 : '',
             'UI_setting_UI_text'                                              : 'UI in battle',
             'UI_setting_UI_tooltip'                                           : '{HEADER}UI in battle{/HEADER}{BODY}'
                                                                                 'Extended:<br/><img src=\"img://objects/ui_extended.png\"></img><br/>'
@@ -184,6 +195,7 @@ class Config(object):
             'UI_menu_UIMyp'                                                   : '<font color=\"#D042F3\">@Myp</font> choice [<font color=\"#D042F3\">twitch.tv/myp_</font>]',
             'UI_menu_UIspoter'                                                : '<font color=\"#6595EE\">@spoter</font> choice [<font color=\"#6595EE\">github.com/spoter</font>]',
             'UI_menu_UIcircon'                                                : '<font color=\"#02C9B3\">@Circon</font> choice [<font color=\"#02C9B3\">twitch.tv/circon</font>]',
+            'UI_menu_UIoldskool'                                              : '<font color=\"#FFD700\">@Oldskool</font> choice [<font color=\"#FFD700\">twitch.tv/oldskool</font>]',
             'UI_menu_UIReplayColor'                                           : 'Colored for Replays',
             'UI_menu_UIReplayColorDamage'                                     : 'Colored for Replays with damage',
             'UI_menu_UIReplay'                                                : 'for Replays',
@@ -213,6 +225,7 @@ class Config(object):
             'UI_menu_nice_red'                                                : 'Nice Red',
             'UI_menu_white'                                                   : 'White',
             'UI_tooltips'                                                     : '<font color=\"#FFFFFF\" size=\"12\">{currentMovingAvgDamage} current moving average damage</font>\n'
+                                                                                '<font color=\"#FFFFFF\" size=\"12\">{currentDamage} current summary damage</font>\n'
                                                                                 'To <font color=\"#FFFFFF\" size=\"12\">{nextPercent}% </font>   need <font color=\"#FFFFFF\" size=\"12\">{needDamage}</font> moving average damage\n'
                                                                                 'This statistic available to last battle on this vehicle\n'
                                                                                 'To <font color=\"#FFFFFF\" size=\"12\">20% </font>   need <font color=\"#F8F400\" size=\"12\">~{_20}</font> moving average damage\n'
@@ -221,14 +234,15 @@ class Config(object):
                                                                                 'To <font color=\"#FFFFFF\" size=\"12\">65% </font>   need <font color=\"#60FF00\" size=\"12\">~{_65}</font> moving average damage\n'
                                                                                 'To <font color=\"#FFFFFF\" size=\"12\">85% </font>   need <font color=\"#02C9B3\" size=\"12\">~{_85}</font> moving average damage\n'
                                                                                 'To <font color=\"#FFFFFF\" size=\"12\">95% </font>   need <font color=\"#D042F3\" size=\"12\">~{_95}</font> moving average damage\n'
-                                                                                'To <font color=\"#FFFFFF\" size=\"12\">100% </font>  need <font color=\"#D042F3\" size=\"12\">~{_100}</font> moving average damage\n'
-                                                                                'Used statistic after patch 0.8.8',
+                                                                                'To <font color=\"#FFFFFF\" size=\"12\">100% </font>  need <font color=\"#D042F3\" size=\"12\">~{_100}</font> moving average damage',
             'battleMessageSizeUp'                                             : 'MoE mod: Size <b>+10%</b>',
             'battleMessageSizeDown'                                           : 'MoE mod: Size <b>-10%</b>',
             'battleMessageSizeLimitMin'                                       : 'MoE mod: Reached <b>minimum[10%]</b>',
             'battleMessageSizeLimitMax'                                       : 'MoE mod: Reached <b>maximum[1000%]</b>',
             'battleMessageSizeReset'                                          : 'MoE mod: Reset Settings</b>',
             'NaN'                                                             : '[<b>NaN</b>]',
+            'UI_HangarStatsStart'                                             : '<b>{currentPercent}<font size=\"14\">({currentDamage})</font></b>',
+            'UI_HangarStatsEnd'                                               : '{c_damageToMark65}, {c_damageToMark85}\n{c_damageToMark95}, {c_damageToMark100}'
         }
         self.data, self.i18n = g_gui.register_data(self.ids, self.data, self.i18n, 'spoter')
         g_gui.register(self.ids, self.template, self.data, self.apply)
@@ -281,6 +295,7 @@ class Config(object):
                         {'label': self.i18n['UI_menu_UIReplayDamage']},
                         {'label': self.i18n['UI_menu_UIReplayColor']},
                         {'label': self.i18n['UI_menu_UIReplayColorDamage']},
+                        {'label': self.i18n['UI_menu_UIoldskool']},
                     ],
                     'width'       : 300,
                     'value'       : self.data['UI'],
@@ -370,6 +385,14 @@ class Config(object):
                     'tooltip': self.i18n['UI_setting_showInTechTreeMarkOfGunPercentFirst_tooltip'],
                     'varName': 'showInTechTreeMarkOfGunPercentFirst'
                 },
+                {
+                    'type'   : 'CheckBox',
+                    'text'   : self.i18n['UI_setting_showInHangar_text'],
+                    'value'  : self.data['showInHangar'],
+                    'tooltip': self.i18n['UI_setting_showInHangar_tooltip'],
+                    'varName': 'showInHangar'
+                },
+
             ]
         }
 
@@ -405,37 +428,7 @@ class Worker(object):
         self.dossier = None
         self.initiated = False
         self.replay = False
-        self.formatStrings = {
-            'status'                 : '',
-            'battleMarkOfGun'        : '',
-            'currentMarkOfGun'       : '',
-            'nextMarkOfGun'          : '',
-            'damageCurrent'          : '',
-            'damageCurrentPercent'   : '',
-            'damageNextPercent'      : '',
-            'damageToMark65'         : '',
-            'damageToMark85'         : '',
-            'damageToMark95'         : '',
-            'damageToMark100'        : '',
-            'damageToMarkInfo'       : '',
-            'damageToMarkInfoLevel'  : '',
-            'c_status'               : '',
-            'c_battleMarkOfGun'      : '',
-            'c_currentMarkOfGun'     : '',
-            'c__nextMarkOfGun'       : '',
-            'c_damageCurrent'        : '',
-            'c_damageCurrentPercent' : '',
-            'c_damageNextPercent'    : '',
-            'c_damageToMark65'       : '',
-            'c_damageToMark85'       : '',
-            'c_damageToMark95'       : '',
-            'c_damageToMark100'      : '',
-            'c_damageToMarkInfo'     : '',
-            'c_damageToMarkInfoLevel': '',
-            'colorOpen'              : '<font color="{color}">',
-            'colorClose'             : '</font>',
-            'color'                  : ''
-        }
+        self.formatStrings = {'status': '', 'battleMarkOfGun': '', 'currentMarkOfGun': '', 'nextMarkOfGun': '', 'damageCurrent': '', 'damageCurrentPercent': '', 'damageNextPercent': '', 'damageToMark65': '', 'damageToMark85': '', 'damageToMark95': '', 'damageToMark100': '', 'damageToMarkInfo': '', 'damageToMarkInfoLevel': '', 'c_status': '', 'c_battleMarkOfGun': '', 'c_currentMarkOfGun': '', 'c__nextMarkOfGun': '', 'c_damageCurrent': '', 'c_damageCurrentPercent': '', 'c_damageNextPercent': '', 'c_damageToMark65': '', 'c_damageToMark85': '', 'c_damageToMark95': '', 'c_damageToMark100': '', 'c_damageToMarkInfo': '', 'c_damageToMarkInfoLevel': '', 'colorOpen': '<font color="{color}">', 'colorClose': '</font>', 'color': '', 'assistSpot': config.data['battleMessage{assistSpot}'], 'assistTrack': config.data['battleMessage{assistTrack}'], 'assistSpam': config.data['battleMessage{assistSpam}']}
         self.messages = {
             'battleMessageskill4ltu'     : '<font size=\"20\">{c_battleMarkOfGun} ({currentMarkOfGun}){status}</font>\n',
             'battleMessageskill4ltuAlt'  : '<font size=\"20\">{c_battleMarkOfGun} ({currentMarkOfGun}){status}</font>\n'
@@ -445,11 +438,11 @@ class Worker(object):
             'battleMessagesMypAlt'       : '<font size=\"20\">{c_battleMarkOfGun}{c_damageCurrent}{status}</font>\n'
                                            '<font size=\"15\">{currentMarkOfGun}{damageCurrentPercent}</font>',
 
-            'battleMessagesspoter'       : '<font size=\"20\">{c_battleMarkOfGun}:{c_damageCurrent}{status}</font>\n'
+            'battleMessagesspoter'       : '<font size=\"20\">{c_battleMarkOfGun}:{c_damageCurrent}{assistCurrent}</font>\n'
                                            '<font size=\"15\">{c_nextMarkOfGun}:{c_damageNextPercent}\n'
                                            '{currentMarkOfGun}:{damageCurrentPercent}</font>',
 
-            'battleMessagesspoterAlt'    : '<font size=\"20\">{c_battleMarkOfGun}:{c_damageCurrent}{status}</font>\n'
+            'battleMessagesspoterAlt'    : '<font size=\"20\">{c_battleMarkOfGun}:{c_damageCurrent}{assistCurrent}</font>\n'
                                            '<font size=\"15\">{c_nextMarkOfGun}:{c_damageNextPercent}\n'
                                            '{currentMarkOfGun}:{damageCurrentPercent}</font>\n'
                                            '<font size=\"12\">{c_damageToMark65}{c_damageToMark85}\n'
@@ -466,6 +459,10 @@ class Worker(object):
 
             'battleMessageReplayColor'   : '<font size=\"72\">{c_battleMarkOfGun}</font>',
             'battleMessageReplayColorAlt': '<font size=\"72\">{c_battleMarkOfGun}</font><font size=\"32\">{c_damageCurrent}</font>',
+
+            'battleMessageoldskool'      : '<font size=\"15\">{c_battleMarkOfGun}\n{c_damageCurrent}{assistCurrent}</font>',
+            'battleMessageoldskoolAlt'   : '<font size=\"15\">{c_battleMarkOfGun}<tab>{c_nextMarkOfGun}\n{c_damageCurrent}{assistCurrent}<tab>{c_damageNextPercent}</font>',
+
         }
         self.levels = []
         self.damages = []
@@ -504,6 +501,9 @@ class Worker(object):
         if config.data['UI'] == 8:
             self.battleMessage = self.messages['battleMessageReplayColorAlt'] if not self.altMode else self.messages['battleMessageReplayColorAlt']
 
+        if config.data['UI'] == 9:
+            self.battleMessage = self.messages['battleMessageoldskool'] if not self.altMode else self.messages['battleMessageoldskoolAlt']
+
     def clearData(self):
         self.altMode = False
         self.movingAvgDamage = 0.0
@@ -520,37 +520,7 @@ class Worker(object):
         self.name = ''
         self.initiated = False
         self.replay = False
-        self.formatStrings = {
-            'status'                 : '',
-            'battleMarkOfGun'        : '',
-            'currentMarkOfGun'       : '',
-            'nextMarkOfGun'          : '',
-            'damageCurrent'          : '',
-            'damageCurrentPercent'   : '',
-            'damageNextPercent'      : '',
-            'damageToMark65'         : '',
-            'damageToMark85'         : '',
-            'damageToMark95'         : '',
-            'damageToMark100'        : '',
-            'damageToMarkInfo'       : '',
-            'damageToMarkInfoLevel'  : '',
-            'c_status'               : '',
-            'c_battleMarkOfGun'      : '',
-            'c_currentMarkOfGun'     : '',
-            'c__nextMarkOfGun'       : '',
-            'c_damageCurrent'        : '',
-            'c_damageCurrentPercent' : '',
-            'c_damageNextPercent'    : '',
-            'c_damageToMark65'       : '',
-            'c_damageToMark85'       : '',
-            'c_damageToMark95'       : '',
-            'c_damageToMark100'      : '',
-            'c_damageToMarkInfo'     : '',
-            'c_damageToMarkInfoLevel': '',
-            'colorOpen'              : '<font color="{color}">',
-            'colorClose'             : '</font>',
-            'color'                  : ''
-        }
+        self.formatStrings = {'status': '', 'battleMarkOfGun': '', 'currentMarkOfGun': '', 'nextMarkOfGun': '', 'damageCurrent': '', 'damageCurrentPercent': '', 'damageNextPercent': '', 'damageToMark65': '', 'damageToMark85': '', 'damageToMark95': '', 'damageToMark100': '', 'damageToMarkInfo': '', 'damageToMarkInfoLevel': '', 'c_status': '', 'c_battleMarkOfGun': '', 'c_currentMarkOfGun': '', 'c__nextMarkOfGun': '', 'c_damageCurrent': '', 'c_damageCurrentPercent': '', 'c_damageNextPercent': '', 'c_damageToMark65': '', 'c_damageToMark85': '', 'c_damageToMark95': '', 'c_damageToMark100': '', 'c_damageToMarkInfo': '', 'c_damageToMarkInfoLevel': '', 'colorOpen': '<font color="{color}">', 'colorClose': '</font>', 'color': '', 'assistSpot': config.data['battleMessage{assistSpot}'], 'assistTrack': config.data['battleMessage{assistTrack}'], 'assistSpam': config.data['battleMessage{assistSpam}']}
         self.levels = []
         self.damages = []
         self.checkBattleMessage()
@@ -845,7 +815,6 @@ class Worker(object):
 
     def keyPressed(self, event):
         if not config.data['enabled']: return
-        if not g_appLoader.getDefBattleApp(): return
         player = BigWorld.player()
         if not player.arena: return
         if player.arena.bonusType != ARENA_BONUS_TYPE.REGULAR: return
@@ -865,12 +834,13 @@ class Worker(object):
                     self.calc()
             if g_gui.get_key(config.data['buttonShow']) and isKeyDownTrigger:
                 config.data['UI'] += 1
-                if config.data['UI'] > 8:
+                if config.data['UI'] > 9:
                     config.data['UI'] = 1
-                status = [config.i18n['UI_menu_UIConfig'], config.i18n['UI_menu_UIskill4ltu'], config.i18n['UI_menu_UIMyp'], config.i18n['UI_menu_UIspoter'], config.i18n['UI_menu_UIcircon'], config.i18n['UI_menu_UIReplay'], config.i18n['UI_menu_UIReplayDamage'], config.i18n['UI_menu_UIReplayColor'], config.i18n['UI_menu_UIReplayColorDamage']]
+                status = [config.i18n['UI_menu_UIConfig'], config.i18n['UI_menu_UIskill4ltu'], config.i18n['UI_menu_UIMyp'], config.i18n['UI_menu_UIspoter'], config.i18n['UI_menu_UIcircon'], config.i18n['UI_menu_UIReplay'], config.i18n['UI_menu_UIReplayDamage'], config.i18n['UI_menu_UIReplayColor'], config.i18n['UI_menu_UIReplayColorDamage'], config.i18n['UI_menu_UIoldskool']]
                 message = config.i18n['UI_message'] % status[config.data['UI']]
                 color = '#84DE40'
-                inject.message(message, color)
+                if config.data['showInBattle']:
+                    inject.message(message, color)
                 config.data = g_gui.update_data(config.ids, config.data, 'spoter')
                 self.checkBattleMessage()
                 flash.setupSize()
@@ -922,7 +892,9 @@ class Worker(object):
         if not config.data['enabled']: return
         if not self.level: return
         if not self.movingAvgDamage: return
-        EDn = self.battleDamage + max(self.RADIO_ASSIST, self.TRACK_ASSIST, self.STUN_ASSIST)
+        assists = (self.RADIO_ASSIST, self.TRACK_ASSIST, self.STUN_ASSIST)
+        assistCurrent = ASSISTS[assists.index(max(assists))]
+        EDn = self.battleDamage + max(assists)
         k = 0.0198019801980198022206547392443098942749202251434326171875  # 2 / (100.0 + 1)
         EMA = k * EDn + (1 - k) * self.movingAvgDamage
         p0, d0, p1, d1, t0, t1 = self.values
@@ -957,6 +929,7 @@ class Worker(object):
         self.formatStrings['c_damageCurrent'] = '%s%s%s' % ('<font color="%s">' % colorNowDamage if not unknown else self.formatStrings['colorOpen'], self.formatStrings['damageCurrent'], self.formatStrings['colorClose'])
         self.formatStrings['c_damageCurrentPercent'] = '%s%s%s' % (self.formatStrings['colorOpen'], self.formatStrings['damageCurrentPercent'], self.formatStrings['colorClose'])
         self.formatStrings['c_damageNextPercent'] = '%s%s%s' % ('<font color="%s">' % colorNextDamage if not unknown else self.formatStrings['colorOpen'], self.formatStrings['damageNextPercent'], self.formatStrings['colorClose'])
+        self.formatStrings['assistCurrent'] = self.formatStrings[assistCurrent] if max(assists) else self.formatStrings['assistTrack']
         flash.setVisible(True)
         flash.set_text(self.battleMessage.format(**self.formatStrings).format(color=self.formatStrings['color']))
 
@@ -978,7 +951,7 @@ class Worker(object):
             message = 'Mod: Marks of Excellence %.2f [by github.com/spoter]' % (config.version_id / 100.0)
             color = '#6595EE'
             inject.message(message, color)
-            status = [config.i18n['UI_menu_UIConfig'], config.i18n['UI_menu_UIskill4ltu'], config.i18n['UI_menu_UIMyp'], config.i18n['UI_menu_UIspoter'], config.i18n['UI_menu_UIcircon'], config.i18n['UI_menu_UIReplay'], config.i18n['UI_menu_UIReplayDamage'], config.i18n['UI_menu_UIReplayColor'], config.i18n['UI_menu_UIReplayColorDamage']]
+            status = [config.i18n['UI_menu_UIConfig'], config.i18n['UI_menu_UIskill4ltu'], config.i18n['UI_menu_UIMyp'], config.i18n['UI_menu_UIspoter'], config.i18n['UI_menu_UIcircon'], config.i18n['UI_menu_UIReplay'], config.i18n['UI_menu_UIReplayDamage'], config.i18n['UI_menu_UIReplayColor'], config.i18n['UI_menu_UIReplayColorDamage'], config.i18n['UI_menu_UIoldskool']]
             message = config.i18n['UI_message'] % status[config.data['UI']]
             color = '#84DE40'
             inject.message(message, color)
@@ -1154,16 +1127,19 @@ class Flash(object):
         self.setup()
         COMPONENT_EVENT.UPDATED += self.update
         self.createObject(COMPONENT_TYPE.PANEL)
-        if config.data['background']:
-            self.createObject(COMPONENT_TYPE.IMAGE)
-            self.updateObject(COMPONENT_TYPE.IMAGE, self.data['backgroundData'])
         self.createObject(COMPONENT_TYPE.LABEL)
+        if config.data['background']:
+            data = {'background': True}
+            self.updateObject(COMPONENT_TYPE.LABEL, data)
+            # self.createObject(COMPONENT_TYPE.IMAGE)
+            # self.updateObject(COMPONENT_TYPE.IMAGE, self.data['backgroundData'])
         if config.data['shadow']:
             self.updateObject(COMPONENT_TYPE.LABEL, self.data['shadow'])
         else:
             self.updateObject(COMPONENT_TYPE.LABEL, {'shadow': {"distance": 0, "angle": 0, "color": 0x000000, "alpha": 0, "blurX": 0, "blurY": 0, "strength": 0, "quality": 0}})
         g_guiResetters.add(self.screenResize)
         self.screenResize()
+        self.setupSize()
 
     def stopBattle(self):
         if not config.data['enabled']: return
@@ -1171,8 +1147,8 @@ class Flash(object):
         g_guiResetters.remove(self.screenResize)
         COMPONENT_EVENT.UPDATED -= self.update
         self.deleteObject(COMPONENT_TYPE.PANEL)
-        if config.data['background']:
-            self.deleteObject(COMPONENT_TYPE.IMAGE)
+        # if config.data['background']:
+        #    self.deleteObject(COMPONENT_TYPE.IMAGE)
         self.deleteObject(COMPONENT_TYPE.LABEL)
 
     def deleteObject(self, name):
@@ -1183,6 +1159,9 @@ class Flash(object):
 
     def updateObject(self, name, data):
         g_guiFlash.updateComponent(self.name[name], data)
+
+    def animateObject(self, name, data, time=1.0):
+        g_guiFlash.animateComponent(self.name[name], time, data, True)
 
     @inject.log
     def update(self, alias, props):
@@ -1208,9 +1187,15 @@ class Flash(object):
             COMPONENT_TYPE.PANEL: config.data.get('panel'),
             COMPONENT_TYPE.IMAGE: {'image': config.data.get('backgroundImage')},
             'backgroundData'    : config.data.get('backgroundData'),
-            COMPONENT_TYPE.LABEL: {'text': '', 'index': 1, 'multiline': True},
+            COMPONENT_TYPE.LABEL: {'text': '', },  # 'multiline': True, 'wordWrap': True, 'drag': True, 'border': True, 'limit': True},
             'shadow'            : {'shadow': config.data.get('shadowText')}
         }
+
+        self.data[COMPONENT_TYPE.PANEL]['index'] = 1
+        self.data[COMPONENT_TYPE.IMAGE]['index'] = 2
+        self.data[COMPONENT_TYPE.LABEL]['index'] = 3
+        self.data[COMPONENT_TYPE.PANEL]['limit'] = True
+        self.data[COMPONENT_TYPE.LABEL]['alpha'] = 1.0
 
     def setupSize(self, h=None, w=None):
         height = int(config.data['panelSize'].get('heightNormal', 50)) if not worker.altMode else int(config.data['panelSize'].get('heightAlt', 80))
@@ -1223,7 +1208,7 @@ class Flash(object):
             width = 130 if not worker.altMode else 130
         if config.data['UI'] == 3:
             height = 70 if not worker.altMode else 100
-            width = 130 if not worker.altMode else 130
+            width = 144 if not worker.altMode else 144
         if config.data['UI'] == 4:
             height = 50 if not worker.altMode else 80
             width = 163 if not worker.altMode else 163
@@ -1231,7 +1216,9 @@ class Flash(object):
         if config.data['UI'] in (5, 6, 7, 8):
             height = 82 if not worker.altMode else 82
             width = 343 if not worker.altMode else 343
-
+        if config.data['UI'] == 9:
+            height = 42 if not worker.altMode else 42
+            width = 54 if not worker.altMode else 115
         if h is not None and w is not None:
             height = h
             width = w
@@ -1242,11 +1229,13 @@ class Flash(object):
         for name in self.data:
             self.data[name]['height'] = height
             self.data[name]['width'] = width
+        self.data[COMPONENT_TYPE.PANEL]['height'] = height
+        self.data[COMPONENT_TYPE.PANEL]['width'] = width
         data = {'height': height, 'width': width}
         self.updateObject(COMPONENT_TYPE.PANEL, data)
+        # if config.data['background']:
+        #    self.updateObject(COMPONENT_TYPE.IMAGE, data)
         self.updateObject(COMPONENT_TYPE.LABEL, data)
-        if config.data['background']:
-            self.updateObject(COMPONENT_TYPE.IMAGE, data)
 
     @staticmethod
     def textRepSize(message):
@@ -1268,7 +1257,8 @@ class Flash(object):
 
     def set_text(self, text):
         txt = '<font face="%s" color="#FFFFFF" vspace="-3" align="baseline" >%s</font>' % (config.data['font'], text)
-        self.updateObject(COMPONENT_TYPE.LABEL, {'text': self.textRepSize(txt)})
+        self.updateObject(COMPONENT_TYPE.LABEL, {'text': self.textRepSize(txt), 'alpha': 0.8})
+        self.animateObject(COMPONENT_TYPE.LABEL, {'alpha': 1.8}, 1)
 
     def setVisible(self, status):
         data = {'visible': status}
@@ -1276,8 +1266,10 @@ class Flash(object):
         self.updateObject(COMPONENT_TYPE.LABEL, data)
         if config.data['background']:
             if config.data['UI'] in (5, 6, 7, 8):
-                data = {'visible': False}
-            self.updateObject(COMPONENT_TYPE.IMAGE, data)
+                data = {'background': False}
+            else:
+                data = {'background': status}
+            self.updateObject(COMPONENT_TYPE.LABEL, data)
 
     @staticmethod
     def screenFix(screen, value, mod, align=1):
@@ -1328,6 +1320,12 @@ class Flash(object):
                 self.data[COMPONENT_TYPE.PANEL]['y'] = y
         config.apply(config.data)
         self.updateObject(COMPONENT_TYPE.PANEL, self.data[COMPONENT_TYPE.PANEL])
+
+    def getData(self):
+        return self.data
+
+    def getNames(self):
+        return self.name
 
 
 config = Config()
@@ -1392,6 +1390,13 @@ def getUserCondition(func, *args):
     if config.data['enabled'] and config.data['showInStatistic']:
         if worker.dossier is not None:
             targetData = worker.dossier
+            damage = ProfileUtils.getValueOrUnavailable(ProfileUtils.getValueOrUnavailable(targetData.getRandomStats().getAvgDamage()))
+            # noinspection PyProtectedMember
+            track = ProfileUtils.getValueOrUnavailable(targetData.getRandomStats()._getAvgValue(targetData.getRandomStats().getBattlesCountVer2, targetData.getRandomStats().getDamageAssistedTrack))
+            # noinspection PyProtectedMember
+            radio = ProfileUtils.getValueOrUnavailable(targetData.getRandomStats()._getAvgValue(targetData.getRandomStats().getBattlesCountVer2, targetData.getRandomStats().getDamageAssistedRadio))
+            stun = ProfileUtils.getValueOrUnavailable(targetData.getRandomStats().getAvgDamageAssistedStun())
+            currentDamage = int(damage + max(track, radio, stun))
             damageRating = targetData.getRecordValue(ACHIEVEMENT_BLOCK.TOTAL, 'damageRating') / 100.0
             movingAvgDamage = targetData.getRecordValue(ACHIEVEMENT_BLOCK.TOTAL, 'movingAvgDamage')
             if damageRating:
@@ -1401,6 +1406,7 @@ def getUserCondition(func, *args):
                 data = {'nextPercent'           : '%.0f' % pC,
                         'needDamage'            : '<font color="%s">%s</font>' % (color[levels.index(filter(lambda x: x >= int(dC), levels)[0])], int(dC)),
                         'currentMovingAvgDamage': '<font color="%s">%s</font>' % (color[levels.index(filter(lambda x: x >= movingAvgDamage, levels)[0])], movingAvgDamage),
+                        'currentDamage'         : '<font color="%s">%s</font>' % (color[levels.index(filter(lambda x: x >= currentDamage, levels)[0])], currentDamage),
                         '_20'                   : worker.getNormalizeDigits(p20),
                         '_40'                   : worker.getNormalizeDigits(p40),
                         '_55'                   : worker.getNormalizeDigits(p55),
@@ -1445,7 +1451,53 @@ def getExtraInfo(func, *args):
             if config.data['showInTechTreeMarkOfGunPercent'] and percent:
                 percentText = ':%s%s%%' % (markOfGunValue, percent)
             result['nameString'] = '%s%s' % (percentText if config.data['showInTechTreeMarkOfGunPercentFirst'] else result['nameString'], result['nameString'] if config.data['showInTechTreeMarkOfGunPercentFirst'] else percentText)
+    return result
 
+
+@inject.hook(HangarHeader, '_makeHeaderVO')
+@inject.log
+def makeHeaderVO(func, *args):
+    result = func(*args)
+    if config.data['showInHangar'] and 'tankInfo' in result:
+        self = args[0]
+        vehicle = self._currentVehicle.item
+        targetData = g_currentVehicle.getDossier()
+        damageRating = targetData.getRecordValue(ACHIEVEMENT_BLOCK.TOTAL, 'damageRating') / 100.0
+        moeStart = ''
+        moeEnd = ''
+        if damageRating:
+            damage = ProfileUtils.getValueOrUnavailable(ProfileUtils.getValueOrUnavailable(targetData.getRandomStats().getAvgDamage()))
+            # noinspection PyProtectedMember
+            track = ProfileUtils.getValueOrUnavailable(targetData.getRandomStats()._getAvgValue(targetData.getRandomStats().getBattlesCountVer2, targetData.getRandomStats().getDamageAssistedTrack))
+            # noinspection PyProtectedMember
+            radio = ProfileUtils.getValueOrUnavailable(targetData.getRandomStats()._getAvgValue(targetData.getRandomStats().getBattlesCountVer2, targetData.getRandomStats().getDamageAssistedRadio))
+            stun = ProfileUtils.getValueOrUnavailable(targetData.getRandomStats().getAvgDamageAssistedStun())
+            currentDamage = int(damage + max(track, radio, stun))
+            movingAvgDamage = targetData.getRecordValue(ACHIEVEMENT_BLOCK.TOTAL, 'movingAvgDamage')
+            pC, dC, p20, p40, p55, p65, p85, p95, p100 = worker.calcStatistics(damageRating, movingAvgDamage)
+            color = ['#F8F400', '#F8F400', '#60FF00', '#02C9B3', '#D042F3', '#D042F3']
+            levels = [p55, p65, p85, p95, p100, 10000000]
+
+            currentDamaged = '<font color="%s">%s</font>' % (color[levels.index(filter(lambda x: x >= currentDamage, levels)[0])], currentDamage)
+            currentMovingAvgDamage = '<font color="%s">%s</font>' % (color[levels.index(filter(lambda x: x >= movingAvgDamage, levels)[0])], movingAvgDamage)
+            data = {
+                'currentPercent'        : '%s%%' % damageRating,
+                'currentMovingAvgDamage': currentMovingAvgDamage,
+                'currentDamage'         : currentDamaged if currentDamage > movingAvgDamage else currentMovingAvgDamage,
+                'nextPercent'           : '<font color="%s">%s%%</font>' % (battleDamageRating[LEVELS.index(filter(lambda x: x >= pC, LEVELS)[0])], pC),
+                'needDamage'            : '<font color="%s">%s</font>' % (color[levels.index(filter(lambda x: x >= int(dC), levels)[0])], int(dC)),
+                'c_damageToMark20'      : '<font color="%s"><b>20%%:%s</b></font>' % (RATING['very_bad'], worker.getNormalizeDigits(p20)),
+                'c_damageToMark40'      : '<font color="%s"><b>40%%:%s</b></font>' % (RATING['bad'], worker.getNormalizeDigits(p40)),
+                'c_damageToMark55'      : '<font color="%s"><b>55%%:%s</b></font>' % (RATING['normal'], worker.getNormalizeDigits(p55)),
+                'c_damageToMark65'      : '<font color="%s"><b>65%%:%s</b></font>' % (RATING['good'], worker.getNormalizeDigits(p65)),
+                'c_damageToMark85'      : '<font color="%s"><b>85%%:%s</b></font>' % (RATING['very_good'], worker.getNormalizeDigits(p85)),
+                'c_damageToMark95'      : '<font color="%s"><b>95%%:%s</b></font>' % (RATING['unique'], worker.getNormalizeDigits(p95)),
+                'c_damageToMark100'     : '<font color="%s"><b>100%%:%s</b></font>' % (RATING['unique'], worker.getNormalizeDigits(p100))
+            }
+            moeStart = text_styles.promoSubTitle(config.i18n['UI_HangarStatsStart'].format(**data))
+            moeEnd = text_styles.stats(config.i18n['UI_HangarStatsEnd'].format(**data))
+        oldData = '%s%s %s' % (moeStart, text_styles.promoSubTitle(vehicle.shortUserName), text_styles.stats(MU.levels_roman(vehicle.level)))
+        result['tankInfo'] = text_styles.concatStylesToMultiLine(oldData, moeEnd)
     return result
 
 
@@ -1454,3 +1506,7 @@ BigWorld.MoESetupSize = flash.setupSize
 
 BigWorld.MoEText = flash.set_text
 # BigWorld.MoEText('<font size=\"60\">100.00%</font>')
+
+BigWorld.MoEUpdateObject = flash.updateObject
+BigWorld.MoEData = flash.getData
+BigWorld.MoEName = flash.getNames
